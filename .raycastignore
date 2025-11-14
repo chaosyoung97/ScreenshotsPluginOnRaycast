@@ -1,0 +1,10 @@
+node_modules/
+.git/
+.DS_Store
+*.log
+.env
+tsconfig.json
+raycast-env.d.ts
+README.md
+float_window.py
+

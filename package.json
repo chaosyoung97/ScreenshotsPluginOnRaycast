@@ -1,0 +1,35 @@
+{
+  "name": "screenshots-plugin",
+  "title": "Screenshots Plugin",
+  "description": "快速截图并悬浮显示",
+  "icon": "icon.png",
+  "author": "chaos",
+  "categories": [
+    "Productivity"
+  ],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "screenshot",
+      "title": "Take Screenshot",
+      "description": "快速截取屏幕并悬浮显示",
+      "mode": "no-view"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "1.60.0",
+    "@raycast/utils": "1.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "prebuild": "test -f float-window || (test -f build-native.sh && ./build-native.sh || echo '请运行 ./build-native.sh 编译 float-window')",
+    "build": "ray build -e dist",
+    "postbuild": "if [ -f float-window ] && [ -d ~/.config/raycast/extensions/screenshots-plugin ]; then cp float-window ~/.config/raycast/extensions/screenshots-plugin/; fi",
+    "dev": "ray develop"
+  }
+}
+
