@@ -3,7 +3,7 @@
 
 echo "正在编译 float-window..."
 
-clang -framework Cocoa -o float-window FloatWindow.m
+clang -framework Cocoa -framework Carbon -framework Vision -framework QuartzCore -framework ImageIO -o float-window FloatWindow.m
 
 if [ $? -eq 0 ]; then
     echo "编译成功！"
