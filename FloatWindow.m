@@ -452,33 +452,16 @@ int main(int argc, const char * argv[]) {
             [toggleButton setAction:@selector(togglePanel:)];
             textHandler.toggleButton = toggleButton;
             
-            // Hover tracking (Optional now, but good to keep for future)
-            NSView *hoverView = [[NSView alloc] initWithFrame:imageView.frame];
-            // We will add subviews later in correct order
-            
-            // Add toggle button above hover view
-            // We will add subviews later in correct order
-            
-            // Store references for adding later
-            objc_setAssociatedObject(window, "hoverView", hoverView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            // Add subviews in correct Z-order (Bottom to Top)
+            [containerView addSubview:imageView];
+            [containerView addSubview:dragArea positioned:NSWindowAbove relativeTo:imageView];
+            [containerView addSubview:toggleButton positioned:NSWindowAbove relativeTo:dragArea];
+        } else {
+            [containerView addSubview:imageView];
+            [containerView addSubview:dragArea positioned:NSWindowAbove relativeTo:imageView];
         }
         
-        // Add subviews in correct Z-order (Bottom to Top)
-        [containerView addSubview:imageView];
-        [containerView addSubview:dragArea]; // Above image
-        
-        if (textHandler) {
-            NSView *hoverView = objc_getAssociatedObject(window, "hoverView");
-            if (hoverView) {
-                [containerView addSubview:hoverView]; // Above dragArea
-            }
-            if (textHandler.toggleButton) {
-                [containerView addSubview:textHandler.toggleButton]; // Above hoverView
-            }
-        }
-        
-        [containerView addSubview:panel]; // Topmost (or below toggle button? Panel should be on top of everything usually, or next to it)
-        // Panel is to the side, so Z-order with image doesn't matter much, but let's keep it on top.
+        [containerView addSubview:panel positioned:NSWindowAbove relativeTo:dragArea];
         
         [window setContentView:containerView];
         [window setIgnoresMouseEvents:NO];
