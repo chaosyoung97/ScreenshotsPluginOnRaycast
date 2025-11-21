@@ -2,7 +2,7 @@
   "name": "screenshots-plugin",
   "title": "Screenshots Plugin",
   "description": "快速截图并悬浮显示",
-  "icon": "icon.png",
+  "icon": "rectangle.dashed.badge.record",
   "author": "chaos",
   "categories": [
     "Productivity"
@@ -26,10 +26,9 @@
     "typescript": "^5.0.0"
   },
   "scripts": {
-    "prebuild": "test -f float-window || (test -f build-native.sh && ./build-native.sh || echo '请运行 ./build-native.sh 编译 float-window')",
-    "build": "ray build -e dist",
-    "postbuild": "if [ -f float-window ] && [ -d ~/.config/raycast/extensions/screenshots-plugin ]; then cp float-window ~/.config/raycast/extensions/screenshots-plugin/; fi",
+    "prebuild": "test -f float-window && test -f get_mouse_position || (test -f build-native.sh && ./build-native.sh || echo '请运行 ./build-native.sh 编译 float-window 和 get_mouse_position')",
+    "build": "tsc --project tsconfig.json --outDir dist && cp float-window dist/ && cp get_mouse_position dist/",
+    "postbuild": "if [ -d dist ] && [ -d ~/.config/raycast/extensions/screenshots-plugin ]; then cp -r dist/* ~/.config/raycast/extensions/screenshots-plugin/; fi",
     "dev": "ray develop"
   }
 }
-
