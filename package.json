@@ -2,7 +2,7 @@
   "name": "screenshots-plugin",
   "title": "Screenshots Plugin",
   "description": "快速截图并悬浮显示",
-  "icon": "icon.png",
+  "icon": "rectangle.dashed.badge.record",
   "author": "chaos",
   "categories": [
     "Productivity"

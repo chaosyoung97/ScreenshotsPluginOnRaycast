@@ -5,43 +5,159 @@
 #import <ImageIO/ImageIO.h>
 #import <objc/runtime.h>
 
+// Forward declaration
+@class TextButton;
+
 @interface TextActionHandler : NSObject
 @property (nonatomic, copy) NSString *recognizedText;
 @property (nonatomic, assign) NSView *panelView;
-- (instancetype)initWithText:(NSString *)text;
+@property (nonatomic, assign) NSWindow *window;
+@property (nonatomic, assign) CGFloat panelWidth;
+@property (nonatomic, assign) CGFloat gap;
+@property (nonatomic, assign) BOOL isPanelOpen;
+@property (nonatomic, assign) NSSize imageSize;
+@property (nonatomic, assign) TextButton *toggleButton;
+
+- (instancetype)initWithText:(NSString *)text window:(NSWindow *)window panel:(NSView *)panel imageSize:(NSSize)size;
 - (void)copyText:(id)sender;
 - (void)pasteText:(id)sender;
 - (void)togglePanel:(id)sender;
 @end
 
+@interface TextButton : NSButton
+@property (nonatomic, assign) BOOL isActive;
+@end
+
+@implementation TextButton
+
+- (instancetype)initWithFrame:(NSRect)frameRect {
+    self = [super initWithFrame:frameRect];
+    if (self) {
+        self.wantsLayer = YES;
+        self.layer.cornerRadius = frameRect.size.width / 2.0; // Circular
+        self.layer.masksToBounds = YES;
+        self.bordered = NO;
+        self.title = @"";
+        self.target = nil;
+        self.action = nil;
+        self.alphaValue = 1.0; // Always visible
+    }
+    return self;
+}
+
+- (void)drawRect:(NSRect)dirtyRect {
+    // Background
+    if (self.isActive) {
+        [[NSColor systemBlueColor] setFill];
+    } else {
+        [[NSColor colorWithRed:0.2 green:0.2 blue:0.2 alpha:0.9] setFill]; // Dark gray
+    }
+    [[NSBezierPath bezierPathWithOvalInRect:self.bounds] fill];
+    
+    [[NSColor whiteColor] setStroke];
+    
+    NSBezierPath *path = [NSBezierPath bezierPath];
+    [path setLineWidth:2.0];
+    [path setLineCapStyle:NSLineCapStyleRound];
+    [path setLineJoinStyle:NSLineJoinStyleRound];
+    
+    NSRect bounds = self.bounds;
+    CGFloat w = bounds.size.width;
+    CGFloat h = bounds.size.height;
+    
+    // Icon sizing
+    CGFloat iconSize = w * 0.55;
+    CGFloat originX = (w - iconSize) / 2.0;
+    CGFloat originY = (h - iconSize) / 2.0;
+    NSRect iconRect = NSMakeRect(originX, originY, iconSize, iconSize);
+    
+    // Viewfinder corners
+    CGFloat cornerLen = iconSize * 0.3;
+    
+    // Top-Left
+    [path moveToPoint:NSMakePoint(NSMinX(iconRect), NSMaxY(iconRect) - cornerLen)];
+    [path lineToPoint:NSMakePoint(NSMinX(iconRect), NSMaxY(iconRect))];
+    [path lineToPoint:NSMakePoint(NSMinX(iconRect) + cornerLen, NSMaxY(iconRect))];
+    
+    // Top-Right
+    [path moveToPoint:NSMakePoint(NSMaxX(iconRect) - cornerLen, NSMaxY(iconRect))];
+    [path lineToPoint:NSMakePoint(NSMaxX(iconRect), NSMaxY(iconRect))];
+    [path lineToPoint:NSMakePoint(NSMaxX(iconRect), NSMaxY(iconRect) - cornerLen)];
+    
+    // Bottom-Right
+    [path moveToPoint:NSMakePoint(NSMaxX(iconRect), NSMinY(iconRect) + cornerLen)];
+    [path lineToPoint:NSMakePoint(NSMaxX(iconRect), NSMinY(iconRect))];
+    [path lineToPoint:NSMakePoint(NSMaxX(iconRect) - cornerLen, NSMinY(iconRect))];
+    
+    // Bottom-Left
+    [path moveToPoint:NSMakePoint(NSMinX(iconRect) + cornerLen, NSMinY(iconRect))];
+    [path lineToPoint:NSMakePoint(NSMinX(iconRect), NSMinY(iconRect))];
+    [path lineToPoint:NSMakePoint(NSMinX(iconRect), NSMinY(iconRect) + cornerLen)];
+    
+    [path stroke];
+    
+    // Text lines inside
+    NSBezierPath *linesPath = [NSBezierPath bezierPath];
+    [linesPath setLineWidth:2.0];
+    [linesPath setLineCapStyle:NSLineCapStyleRound];
+    
+    CGFloat centerX = w / 2.0;
+    CGFloat centerY = h / 2.0;
+    CGFloat lineSpacing = iconSize * 0.25;
+    
+    // Top line (Long)
+    CGFloat topLineW = iconSize * 0.6;
+    [linesPath moveToPoint:NSMakePoint(centerX - topLineW/2, centerY + lineSpacing)];
+    [linesPath lineToPoint:NSMakePoint(centerX + topLineW/2, centerY + lineSpacing)];
+    
+    // Middle line (Long)
+    CGFloat midLineW = iconSize * 0.6;
+    [linesPath moveToPoint:NSMakePoint(centerX - midLineW/2, centerY)];
+    [linesPath lineToPoint:NSMakePoint(centerX + midLineW/2, centerY)];
+    
+    // Bottom line (Short)
+    CGFloat botLineW = iconSize * 0.35;
+    [linesPath moveToPoint:NSMakePoint(centerX - botLineW/2, centerY - lineSpacing)];
+    [linesPath lineToPoint:NSMakePoint(centerX + botLineW/2, centerY - lineSpacing)];
+    
+    [linesPath stroke];
+}
+
+@end
+
 @implementation TextActionHandler
-- (instancetype)initWithText:(NSString *)text {
+
+- (instancetype)initWithText:(NSString *)text window:(NSWindow *)window panel:(NSView *)panel imageSize:(NSSize)size {
     self = [super init];
     if (self) {
         _recognizedText = [text copy];
+        _window = window;
+        _panelView = panel;
+        _imageSize = size;
+        _gap = 12.0;
+        _panelWidth = panel.frame.size.width;
+        _isPanelOpen = NO;
+        
+        // Initially hide panel
+        _panelView.hidden = YES;
+        _panelView.alphaValue = 0.0;
     }
     return self;
 }
 
 - (void)copyText:(id)sender {
-    if (self.recognizedText.length == 0) {
-        return;
-    }
+    if (self.recognizedText.length == 0) return;
     NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
     [pasteboard clearContents];
     [pasteboard setString:self.recognizedText forType:NSPasteboardTypeString];
 }
 
 - (void)pasteText:(id)sender {
-    if (self.recognizedText.length == 0) {
-        return;
-    }
+    if (self.recognizedText.length == 0) return;
     [self copyText:nil];
     
     CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateCombinedSessionState);
-    if (!source) {
-        return;
-    }
+    if (!source) return;
     CGEventRef keyDown = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_ANSI_V, true);
     CGEventSetFlags(keyDown, kCGEventFlagMaskCommand);
     CGEventRef keyUp = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_ANSI_V, false);
@@ -56,36 +172,53 @@
 }
 
 - (void)togglePanel:(id)sender {
-    if (!self.panelView) {
-        return;
+    self.isPanelOpen = !self.isPanelOpen;
+    
+    // Update button state
+    if (self.toggleButton) {
+        self.toggleButton.isActive = self.isPanelOpen;
+        [self.toggleButton setNeedsDisplay:YES];
     }
     
-    BOOL shouldShow = self.panelView.isHidden || self.panelView.alphaValue < 1.0;
-    if (shouldShow && self.panelView.superview) {
-        [self.panelView.superview addSubview:self.panelView positioned:NSWindowAbove relativeTo:nil];
+    NSRect currentFrame = self.window.frame;
+    NSRect newFrame = currentFrame;
+    NSRect screenFrame = self.window.screen.frame;
+    
+    CGFloat expandWidth = self.gap + self.panelWidth;
+    
+    if (self.isPanelOpen) {
+        // Expand
+        newFrame.size.width += expandWidth;
+        
+        // Check right boundary
+        if (NSMaxX(newFrame) > NSMaxX(screenFrame)) {
+            // Shift left
+            newFrame.origin.x -= (NSMaxX(newFrame) - NSMaxX(screenFrame)) + 20.0;
+        }
+        // Check left boundary
+        if (newFrame.origin.x < NSMinX(screenFrame)) {
+            newFrame.origin.x = NSMinX(screenFrame) + 20.0;
+        }
+        
+        // Show panel
+        self.panelView.hidden = NO;
+        [[self.panelView animator] setAlphaValue:1.0];
+        
+    } else {
+        // Collapse
+        newFrame.size.width -= expandWidth;
+        
+        // Hide panel
+        [[self.panelView animator] setAlphaValue:0.0];
     }
     
-    [NSAnimationContext runAnimationGroup:^(NSAnimationContext * _Nonnull context) {
-        context.duration = 0.18;
-        context.allowsImplicitAnimation = YES;
-        if (shouldShow) {
-            self.panelView.hidden = NO;
-            self.panelView.alphaValue = 1.0;
-        } else {
-            self.panelView.alphaValue = 0.0;
-        }
-    } completionHandler:^{
-        if (!shouldShow) {
-            self.panelView.hidden = YES;
-        }
-    }];
+    [self.window setFrame:newFrame display:YES animate:YES];
 }
+
 @end
 
 static NSString *RecognizedTextFromImage(NSImage *image) {
-    if (!image) {
-        return nil;
-    }
+    if (!image) return nil;
     
     CGImageRef cgImage = [image CGImageForProposedRect:NULL context:nil hints:nil];
     BOOL shouldReleaseCGImage = NO;
@@ -101,51 +234,36 @@ static NSString *RecognizedTextFromImage(NSImage *image) {
         }
     }
     
-    if (!cgImage) {
-        return nil;
-    }
+    if (!cgImage) return nil;
     
     VNRecognizeTextRequest *request = [[VNRecognizeTextRequest alloc] init];
     request.recognitionLevel = VNRequestTextRecognitionLevelAccurate;
     request.usesLanguageCorrection = YES;
-    
-    // 设置识别语言，支持中文和英文
     request.recognitionLanguages = @[@"zh-Hans", @"zh-Hant", @"en-US", @"en-GB"];
-    
-    // 设置其他参数以提高识别准确率
-    request.usesLanguageCorrection = YES;
-    request.minimumTextHeight = 0; // 自动检测文本高度
+    request.minimumTextHeight = 0;
     
     NSError *visionError = nil;
     VNImageRequestHandler *handler = [[VNImageRequestHandler alloc] initWithCGImage:cgImage options:@{}];
     BOOL success = [handler performRequests:@[request] error:&visionError];
     
     if (!success || visionError) {
-        if (shouldReleaseCGImage && cgImage) {
-            CGImageRelease(cgImage);
-        }
+        if (shouldReleaseCGImage && cgImage) CGImageRelease(cgImage);
         return nil;
     }
     
     NSMutableString *recognized = [NSMutableString string];
     for (VNRecognizedTextObservation *observation in request.results) {
-        // 获取置信度最高的候选文本
-        NSArray *candidates = [observation topCandidates:3]; // 获取前3个候选
+        NSArray *candidates = [observation topCandidates:3];
         if (candidates.count > 0) {
             VNRecognizedText *topCandidate = candidates[0];
-            // 只有当置信度足够高时才添加到结果中
-            if (topCandidate.confidence > 0.1) { // 设置置信度阈值
-                if (recognized.length > 0) {
-                    [recognized appendString:@"\n"];
-                }
+            if (topCandidate.confidence > 0.1) {
+                if (recognized.length > 0) [recognized appendString:@"\n"];
                 [recognized appendString:topCandidate.string];
             }
         }
     }
     
-    if (shouldReleaseCGImage && cgImage) {
-        CGImageRelease(cgImage);
-    }
+    if (shouldReleaseCGImage && cgImage) CGImageRelease(cgImage);
     
     NSString *trimmed = [recognized stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     return trimmed.length > 0 ? trimmed : nil;
@@ -157,8 +275,6 @@ static NSString *RecognizedTextFromImage(NSImage *image) {
 @implementation FloatingWindow
 - (BOOL)canBecomeKeyWindow { return NO; }
 - (BOOL)canBecomeMainWindow { return NO; }
-
-// 按住 Cmd 键时可以拖动窗口
 - (void)mouseDown:(NSEvent *)event {
     if ([event modifierFlags] & NSEventModifierFlagCommand) {
         [self performWindowDragWithEvent:event];
@@ -170,9 +286,8 @@ static NSString *RecognizedTextFromImage(NSImage *image) {
 @end
 
 @implementation ClickThroughImageView
-// 重写 hitTest 实现点击穿透
 - (NSView *)hitTest:(NSPoint)point {
-    return nil;  // 返回 nil 表示点击穿透
+    return nil;
 }
 @end
 
@@ -191,7 +306,6 @@ int main(int argc, const char * argv[]) {
             return 1;
         }
         
-        // 获取图片像素尺寸（而不是点尺寸），以便实现 1:1 显示
         NSSize imageSize = [image size];
         NSSize pixelSize = imageSize;
         for (NSImageRep *rep in [image representations]) {
@@ -204,243 +318,205 @@ int main(int argc, const char * argv[]) {
         
         NSScreen *screen = [NSScreen mainScreen];
         CGFloat scaleFactor = screen ? [screen backingScaleFactor] : 1.0;
-        if (scaleFactor <= 0.0) {
-            scaleFactor = 1.0;
-        }
+        if (scaleFactor <= 0.0) scaleFactor = 1.0;
         
-        // 按照当前屏幕的缩放因子换算为点尺寸，确保视觉上 1:1
-        NSSize displaySize = NSMakeSize(pixelSize.width / scaleFactor, pixelSize.height / scaleFactor);
+        NSSize imageDisplaySize = NSMakeSize(pixelSize.width / scaleFactor, pixelSize.height / scaleFactor);
         NSRect screenFrame = screen ? [screen frame] : NSMakeRect(0, 0, 1920, 1080);
         
-        // 计算窗口位置
+        // OCR Panel config
+        CGFloat gap = 12.0;
+        CGFloat panelWidth = 280.0;
+        CGFloat panelHeight = MIN(400.0, imageDisplaySize.height);
+        if (panelHeight < 200.0) panelHeight = 200.0;
+        
+        // Initial window size = Image size (Panel hidden by default)
+        CGFloat totalWidth = imageDisplaySize.width; 
+        CGFloat totalHeight = MAX(imageDisplaySize.height, panelHeight);
+        if (panelHeight > totalHeight) totalHeight = panelHeight;
+        
         CGFloat windowX, windowY;
         
-        // 如果提供了截图区域，则使用截图区域作为窗口位置
         if (argc >= 6) {
             CGFloat screenshotX = atof(argv[2]);
             CGFloat screenshotY = atof(argv[3]);
-            CGFloat screenshotWidth = atof(argv[4]);
             CGFloat screenshotHeight = atof(argv[5]);
-            // 日志输出出来 argv中的所有信息
-            NSLog(@"[ScreenshotPlugin] 调试信息 argv中的信息: %s, %s, %s, %s, %s, %s, %s", argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);
             
-            // 使用截图的原始位置
             windowX = screenshotX;
-            // 修复Y轴位置问题：根据用户反馈，Y轴位置错位了一个截图高度
-            // 需要将Y坐标向上移动一个截图高度
-            // windowY = screenshotY;
-            // 可能的修复方式
-            NSLog(@"[ScreenshotPlugin] 调试信息 windowY， screenshotY， displaySize.height分别是:%.2f, %.2f, %.2f", windowY, screenshotY, displaySize.height);
+            windowY = screenshotY + screenshotHeight - imageDisplaySize.height;
             
-            windowY = screenshotY + screenshotHeight - displaySize.height;
-            NSLog(@"[ScreenshotPlugin] 计算结果为：%.2f", windowY);
-            // 添加调试日志
-            // NSLog(@"调试信息 - 屏幕尺寸: %.2f x %.2f", screenFrame.size.width, screenFrame.size.height);
-            // NSLog(@"调试信息 - 图片尺寸: %.2f x %.2f", displaySize.width, displaySize.height);
-            // NSLog(@"调试信息 - 截图区域: X=%.2f, Y=%.2f, W=%.2f, H=%.2f", screenshotX, screenshotY, screenshotWidth, screenshotHeight);
-
-            // NSLog(@"调试信息 - 初始窗口位置: X=%.2f, Y=%.2f", windowX, windowY);
-
-            // // 在边界检查后添加
-            // NSLog(@"调试信息 - 最终窗口位置: X=%.2f, Y=%.2f", windowX, windowY);
-
-            
-            // 确保窗口不会超出屏幕边界
+            if (windowX + totalWidth > screenFrame.size.width) {
+                windowX = screenFrame.size.width - totalWidth - 20.0;
+            }
             if (windowX < 0) windowX = 0;
             if (windowY < 0) windowY = 0;
-            if (windowX + displaySize.width > screenFrame.size.width) {
-                windowX = screenFrame.size.width - displaySize.width;
+            if (windowY + totalHeight > screenFrame.size.height) {
+                windowY = screenFrame.size.height - totalHeight;
             }
-            if (windowY + displaySize.height > screenFrame.size.height) {
-                // windowY = screenFrame.size.height - displaySize.height;
-                // 修复Y轴位置问题：需要考虑坐标系统的差异
-                windowY = screenFrame.size.height - screenshotY - displaySize.height;
-            }
-            
-            // 如果截图尺寸与图片尺寸不匹配，使用图片的实际尺寸
-            // 但保持位置不变
         } else {
-            // 默认居中显示
-            windowX = (screenFrame.size.width - displaySize.width) / 2;
-            windowY = (screenFrame.size.height - displaySize.height) / 2;
+            windowX = (screenFrame.size.width - totalWidth) / 2;
+            windowY = (screenFrame.size.height - totalHeight) / 2;
         }
         
-        // 创建无边框窗口
-        NSRect windowRect = NSMakeRect(windowX, windowY, displaySize.width, displaySize.height);
+        NSRect windowRect = NSMakeRect(windowX, windowY, totalWidth, totalHeight);
+        
         FloatingWindow *window = [[FloatingWindow alloc] 
             initWithContentRect:windowRect
             styleMask:NSWindowStyleMaskBorderless
             backing:NSBackingStoreBuffered
             defer:NO];
         
-        // 设置窗口属性
         [window setLevel:NSFloatingWindowLevel];
         [window setOpaque:NO];
         [window setBackgroundColor:[NSColor clearColor]];
         [window setHasShadow:YES];
         [window setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorStationary];
         
-        // 创建容器视图
-        NSView *containerView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, displaySize.width, displaySize.height)];
+        NSView *containerView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, totalWidth, totalHeight)];
+        containerView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
         
-        // 创建图片视图（点击穿透）
-        ClickThroughImageView *imageView = [[ClickThroughImageView alloc] initWithFrame:NSMakeRect(0, 0, displaySize.width, displaySize.height)];
+        CGFloat imageY = (totalHeight - imageDisplaySize.height) / 2.0;
+        ClickThroughImageView *imageView = [[ClickThroughImageView alloc] initWithFrame:NSMakeRect(0, imageY, imageDisplaySize.width, imageDisplaySize.height)];
         [imageView setImage:image];
         [imageView setImageScaling:NSImageScaleAxesIndependently];
         [imageView setEditable:NO];
         
-        // 检测图片中的文字
-        NSString *recognizedText = RecognizedTextFromImage(image);
-        TextActionHandler *textHandler = nil;
-        
-        // 创建拖动区域（窗口边缘 10px，不点击穿透，用于拖动）
-        CGFloat dragAreaSize = 10.0;
-        NSView *dragArea = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, displaySize.width, displaySize.height)];
+        // Drag Area - Now covers the entire image
+        NSView *dragArea = [[NSView alloc] initWithFrame:imageView.frame];
         [dragArea setWantsLayer:YES];
         dragArea.layer.backgroundColor = [[NSColor clearColor] CGColor];
         
-        // 拖动区域可以拖动窗口
-        [dragArea addTrackingArea:[[NSTrackingArea alloc] 
-            initWithRect:NSMakeRect(0, 0, displaySize.width, dragAreaSize)
-            options:NSTrackingActiveInKeyWindow | NSTrackingMouseEnteredAndExited | NSTrackingInVisibleRect
-            owner:dragArea
-            userInfo:nil]];
-        
-        // 实现拖动
-        [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDragged handler:^NSEvent *(NSEvent *event) {
-            NSPoint location = [event locationInWindow];
-            // 如果鼠标在边缘区域，允许拖动
-            if (location.y < dragAreaSize || location.y > displaySize.height - dragAreaSize ||
-                location.x < dragAreaSize || location.x > displaySize.width - dragAreaSize) {
-                [window performWindowDragWithEvent:event];
-            }
-            return event;
-        }];
-        
-        [containerView addSubview:imageView];
-        [containerView addSubview:dragArea positioned:NSWindowAbove relativeTo:imageView];
-        
-        // 在图片右侧显示文字识别结果
-        // 即使没有识别到文字，也显示一个空的面板，方便用户知道OCR功能存在
-        // 移除尺寸限制，确保面板总是显示
-        // 文字面板宽度
-        CGFloat panelWidth = MIN(300.0, screenFrame.size.width - displaySize.width - 50.0);
-        if (panelWidth < 100.0) panelWidth = 100.0;
-        
-        // 文字面板高度，根据文字内容自适应
-        CGFloat panelHeight = MIN(400.0, displaySize.height - 40.0);
-        if (panelHeight < 100.0) panelHeight = 100.0;
-        
-        // 文字面板位置（在图片右侧）
-        CGFloat panelX = displaySize.width + 10.0;
-        CGFloat panelY = (displaySize.height - panelHeight) / 2.0;
-        
-        // 确保面板不会超出屏幕边界
-        if (panelX + panelWidth > screenFrame.size.width) {
-            panelX = screenFrame.size.width - panelWidth - 10.0;
-        }
-        if (panelY < 10.0) panelY = 10.0;
-        if (panelY + panelHeight > screenFrame.size.height) {
-            panelY = screenFrame.size.height - panelHeight - 10.0;
-        }
+        // OCR Panel (Initially hidden, positioned to right)
+        CGFloat panelX = imageDisplaySize.width + gap;
+        CGFloat panelY = (totalHeight - panelHeight) / 2.0;
         
         NSVisualEffectView *panel = [[NSVisualEffectView alloc] initWithFrame:NSMakeRect(panelX, panelY, panelWidth, panelHeight)];
-        [panel setMaterial:NSVisualEffectMaterialSidebar];
-        [panel setBlendingMode:NSVisualEffectBlendingModeWithinWindow];
+        [panel setMaterial:NSVisualEffectMaterialHUDWindow];
+        [panel setBlendingMode:NSVisualEffectBlendingModeBehindWindow];
         [panel setState:NSVisualEffectStateActive];
         [panel setWantsLayer:YES];
-        panel.layer.cornerRadius = 12.0;
-        panel.hidden = NO; // 默认显示
-        panel.alphaValue = 1.0;
+        panel.layer.cornerRadius = 10.0;
+        panel.layer.masksToBounds = YES;
+        panel.hidden = YES;
+        panel.alphaValue = 0.0;
         
-        NSTextField *titleLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(12.0, panelHeight - 30.0, panelWidth - 24.0, 20.0)];
-        [titleLabel setStringValue:recognizedText && recognizedText.length > 0 ? @"识别到的文字" : @"未识别到文字"];
-        [titleLabel setEditable:NO];
-        [titleLabel setBordered:NO];
-        [titleLabel setDrawsBackground:NO];
-        [titleLabel setFont:[NSFont boldSystemFontOfSize:14.0]];
+        NSString *recognizedText = RecognizedTextFromImage(image);
+        TextActionHandler *textHandler = nil;
         
         if (recognizedText && recognizedText.length > 0) {
-            textHandler = [[TextActionHandler alloc] initWithText:recognizedText];
+            textHandler = [[TextActionHandler alloc] initWithText:recognizedText window:window panel:panel imageSize:imageDisplaySize];
             objc_setAssociatedObject(window, "TextActionHandler", textHandler, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            textHandler.panelView = panel;
             
-            // 创建可滚动的文本视图来显示完整文字内容
-            NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(12.0, 40.0, panelWidth - 24.0, panelHeight - 70.0)];
+            // Panel Content
+            NSTextField *titleLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(12.0, panelHeight - 32.0, panelWidth - 24.0, 20.0)];
+            [titleLabel setStringValue:@"识别结果"];
+            [titleLabel setEditable:NO];
+            [titleLabel setBordered:NO];
+            [titleLabel setDrawsBackground:NO];
+            [titleLabel setFont:[NSFont boldSystemFontOfSize:13.0]];
+            [titleLabel setTextColor:[NSColor labelColor]];
+            [panel addSubview:titleLabel];
+            
+            NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(12.0, 44.0, panelWidth - 24.0, panelHeight - 80.0)];
             scrollView.hasVerticalScroller = YES;
-            scrollView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+            scrollView.drawsBackground = NO;
             
-            NSTextView *textView = [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, panelWidth - 24.0, panelHeight - 70.0)];
+            NSTextView *textView = [[NSTextView alloc] initWithFrame:scrollView.bounds];
             [textView setString:recognizedText];
             [textView setEditable:NO];
-            [textView setFont:[NSFont systemFontOfSize:13.0]];
-            [textView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-            
-            // 保留换行格式
+            [textView setFont:[NSFont systemFontOfSize:12.0]];
+            [textView setBackgroundColor:[NSColor clearColor]];
+            [textView setTextColor:[NSColor labelColor]];
             textView.textContainer.lineFragmentPadding = 0;
             textView.textContainerInset = NSMakeSize(0, 0);
-            
+            textView.verticallyResizable = YES;
+            textView.horizontallyResizable = NO;
+            [textView.textContainer setWidthTracksTextView:YES];
             [scrollView setDocumentView:textView];
+            [panel addSubview:scrollView];
             
-            CGFloat buttonWidth = (panelWidth - 36.0) / 2.0;
-            NSButton *copyButton = [NSButton buttonWithTitle:@"复制文字" target:textHandler action:@selector(copyText:)];
-            [copyButton setFrame:NSMakeRect(12.0, 10.0, buttonWidth, 28.0)];
+            CGFloat buttonWidth = (panelWidth - 30.0) / 2.0;
+            NSButton *copyButton = [NSButton buttonWithTitle:@"复制" target:textHandler action:@selector(copyText:)];
+            [copyButton setFrame:NSMakeRect(12.0, 10.0, buttonWidth, 26.0)];
             [copyButton setBezelStyle:NSBezelStyleRounded];
             
-            NSButton *pasteButton = [NSButton buttonWithTitle:@"粘贴文字" target:textHandler action:@selector(pasteText:)];
-            [pasteButton setFrame:NSMakeRect(24.0 + buttonWidth, 10.0, buttonWidth, 28.0)];
+            NSButton *pasteButton = [NSButton buttonWithTitle:@"粘贴" target:textHandler action:@selector(pasteText:)];
+            [pasteButton setFrame:NSMakeRect(18.0 + buttonWidth, 10.0, buttonWidth, 26.0)];
             [pasteButton setBezelStyle:NSBezelStyleRounded];
             
-            [panel addSubview:titleLabel];
-            [panel addSubview:scrollView];
             [panel addSubview:copyButton];
             [panel addSubview:pasteButton];
-        } else {
-            // 没有识别到文字时显示提示信息
-            NSTextField *infoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(12.0, panelHeight/2 - 20.0, panelWidth - 24.0, 40.0)];
-            [infoLabel setStringValue:@"图片中未检测到可识别的文字"];
-            [infoLabel setEditable:NO];
-            [infoLabel setBordered:NO];
-            [infoLabel setDrawsBackground:NO];
-            [infoLabel setFont:[NSFont systemFontOfSize:13.0]];
-            [infoLabel setTextColor:[NSColor secondaryLabelColor]];
-            [infoLabel setAlignment:NSTextAlignmentCenter];
             
-            [panel addSubview:titleLabel];
-            [panel addSubview:infoLabel];
+            // Toggle Button
+            TextButton *toggleButton = [[TextButton alloc] initWithFrame:NSMakeRect(imageDisplaySize.width - 36.0, imageY + 6.0, 30.0, 30.0)];
+            [toggleButton setTarget:textHandler];
+            [toggleButton setAction:@selector(togglePanel:)];
+            textHandler.toggleButton = toggleButton;
+            
+            // Hover tracking (Optional now, but good to keep for future)
+            NSView *hoverView = [[NSView alloc] initWithFrame:imageView.frame];
+            // We will add subviews later in correct order
+            
+            // Add toggle button above hover view
+            // We will add subviews later in correct order
+            
+            // Store references for adding later
+            objc_setAssociatedObject(window, "hoverView", hoverView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
         
-        // 将文字面板添加到窗口内容视图
-        [containerView addSubview:panel positioned:NSWindowAbove relativeTo:imageView];
+        // Add subviews in correct Z-order (Bottom to Top)
+        [containerView addSubview:imageView];
+        [containerView addSubview:dragArea]; // Above image
+        
+        if (textHandler) {
+            NSView *hoverView = objc_getAssociatedObject(window, "hoverView");
+            if (hoverView) {
+                [containerView addSubview:hoverView]; // Above dragArea
+            }
+            if (textHandler.toggleButton) {
+                [containerView addSubview:textHandler.toggleButton]; // Above hoverView
+            }
+        }
+        
+        [containerView addSubview:panel]; // Topmost (or below toggle button? Panel should be on top of everything usually, or next to it)
+        // Panel is to the side, so Z-order with image doesn't matter much, but let's keep it on top.
         
         [window setContentView:containerView];
-        [window setIgnoresMouseEvents:NO];  // 允许边缘区域响应鼠标事件
+        [window setIgnoresMouseEvents:NO];
         [window makeKeyAndOrderFront:nil];
         
-        // 创建应用
         NSApplication *app = [NSApplication sharedApplication];
-        [app setActivationPolicy:NSApplicationActivationPolicyRegular]; // 改为Regular以确保窗口可见
-        [app activateIgnoringOtherApps:YES]; // 确保应用激活
+        [app setActivationPolicy:NSApplicationActivationPolicyRegular];
+        [app activateIgnoringOtherApps:YES];
         
         __block BOOL isDragging = NO;
         __block NSPoint dragOffset = NSZeroPoint;
         
         NSTimer *eventTimer = [NSTimer scheduledTimerWithTimeInterval:0.01 repeats:YES block:^(NSTimer * _Nonnull timer) {
-            // ESC 键检测
             if (CGEventSourceKeyState(kCGEventSourceStateCombinedSessionState, kVK_Escape)) {
                 [app terminate:nil];
                 return;
             }
             
-            // 拖动检测
             BOOL leftDown = CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState, kCGMouseButtonLeft);
             NSPoint mouseLocation = [NSEvent mouseLocation];
             NSRect windowFrame = [window frame];
+            NSPoint locationInWindow = NSMakePoint(mouseLocation.x - windowFrame.origin.x, mouseLocation.y - windowFrame.origin.y);
             
             if (!isDragging) {
                 if (leftDown && NSPointInRect(mouseLocation, windowFrame)) {
-                    isDragging = YES;
-                    dragOffset = NSMakePoint(mouseLocation.x - windowFrame.origin.x, mouseLocation.y - windowFrame.origin.y);
+                    NSRect imageRectInWindow = imageView.frame;
+                    BOOL isCommandPressed = ([NSEvent modifierFlags] & NSEventModifierFlagCommand) != 0;
+                    
+                    if (NSPointInRect(locationInWindow, imageRectInWindow)) {
+                        // Don't drag if clicking on the toggle button
+                        if (textHandler && textHandler.toggleButton && NSPointInRect(locationInWindow, textHandler.toggleButton.frame)) {
+                            return;
+                        }
+                        
+                        // Allow dragging anywhere on the image
+                        isDragging = YES;
+                        dragOffset = NSMakePoint(mouseLocation.x - windowFrame.origin.x, mouseLocation.y - windowFrame.origin.y);
+                    }
                 }
             }
             
@@ -455,11 +531,8 @@ int main(int argc, const char * argv[]) {
         }];
         
         [[NSRunLoop mainRunLoop] addTimer:eventTimer forMode:NSRunLoopCommonModes];
-        
-        // 运行应用
         [app run];
     }
-    
     return 0;
 }
 
