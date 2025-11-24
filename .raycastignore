@@ -1,10 +1,24 @@
+# Dependencies
 node_modules/
+
+# Git
 .git/
+
+# macOS
 .DS_Store
 *.log
+
+# Environment
 .env
+
+# Development files
 tsconfig.json
 raycast-env.d.ts
-README.md
-float_window.py
 
+# Documentation
+README.md
+CHANGELOG.md
+
+# Build scripts
+build-native.sh
+*.m

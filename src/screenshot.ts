@@ -7,85 +7,187 @@ import { existsSync, unlinkSync } from "fs";
 
 const execAsync = promisify(exec);
 
-export default async function Command() {
+// Constants
+const SCREENCAPTURE_PATH = "/usr/sbin/screencapture";
+const SIPS_PATH = "/usr/bin/sips";
+const OSASCRIPT_PATH = "/usr/bin/osascript";
+const WINDOW_OPEN_DELAY_MS = 500;
+const MONITOR_CHECK_INTERVAL_MS = 500;
+const DEFAULT_IMAGE_WIDTH = 800;
+const DEFAULT_IMAGE_HEIGHT = 600;
+
+// Binary names
+const FLOAT_WINDOW_BINARY = "float-window";
+const MOUSE_POSITION_BINARY = "get_mouse_position";
+
+// Error messages
+const ERROR_MESSAGES = {
+  SCREENSHOT_CANCELLED: "User cancelled screenshot",
+  SCREENSHOT_FAILED: "Screenshot failed",
+  BINARY_NOT_FOUND: "Binary file not found",
+  UNKNOWN_ERROR: "Unknown error",
+} as const;
+
+// Toast messages (Chinese)
+const TOAST_MESSAGES_ZH = {
+  SCREENSHOT_FAILED: "截图失败",
+  ERROR: "错误",
+  BINARY_NOT_FOUND: "找不到 float-window 可执行文件",
+} as const;
+
+// Toast messages (English)
+const TOAST_MESSAGES_EN = {
+  SCREENSHOT_FAILED: "Screenshot Failed",
+  ERROR: "Error",
+  BINARY_NOT_FOUND: "Cannot find float-window executable",
+} as const;
+
+// Use Chinese by default (can be made configurable in the future)
+const TOAST_MESSAGES = TOAST_MESSAGES_ZH;
+
+/**
+ * Rectangle position and size
+ */
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Point coordinates
+ */
+interface Point {
+  x: number;
+  y: number;
+}
+
+/**
+ * Main command to take a screenshot and display it in a floating window
+ */
+export default async function Command(): Promise<void> {
   let screenshotPath = "";
   try {
-    // 立即关闭 Raycast 主窗口
+    // Close Raycast main window immediately
     await closeMainWindow();
 
-    // 生成临时文件路径
+    // Generate temporary file path
     const timestamp = Date.now();
     screenshotPath = join(tmpdir(), `raycast-screenshot-${timestamp}.png`);
 
-    // 使用 screencapture 命令截图（-i 表示交互式选择区域）
-    let screenshotRect: { x: number; y: number; width: number; height: number } | null = null;
-    let finalRect: { x: number; y: number; width: number; height: number } | null = null;
+    // Take screenshot using macOS screencapture command (-i for interactive region selection)
+    await takeScreenshot(screenshotPath);
 
-    await new Promise<void>((resolve, reject) => {
-      const screencapture = spawn("/usr/sbin/screencapture", ["-i", screenshotPath], {
-        stdio: "ignore",
-      });
+    // Get screenshot region information for smart window positioning
+    const finalRect = await getScreenshotRect(screenshotPath);
 
-      screencapture.on("close", (code) => {
-        if (existsSync(screenshotPath)) {
-          resolve();
-        } else {
-          reject(new Error("用户取消了截图操作"));
-        }
-      });
-
-      screencapture.on("error", (error) => {
-        reject(error);
-      });
-    });
-
-    // 获取截图区域信息
-    try {
-      // 获取鼠标位置作为截图区域的近似位置
-      const mousePosition = await getMousePosition();
-      if (mousePosition) {
-        // 获取图片实际尺寸
-        const dimensions = await getImageDimensions(screenshotPath);
-
-        // 使用鼠标位置作为截图区域的中心点
-        const width = dimensions.width;
-        const height = dimensions.height;
-        const x = mousePosition.x - width / 2;
-        const y = mousePosition.y - height / 2;
-        finalRect = { x, y, width, height };
-      }
-    } catch (e) {
-      console.error("获取截图区域信息失败:", e);
-    }
-
-    // 显示悬浮窗口
+    // Display floating window
     await showFloatingWindow(screenshotPath, finalRect);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "未知错误";
+    await handleError(error, screenshotPath);
+  }
+}
 
-    if (errorMessage.includes("取消")) {
-      return;
-    }
-
-    await showToast({
-      style: Toast.Style.Failure,
-      title: "截图失败",
-      message: errorMessage,
+/**
+ * Take a screenshot using macOS screencapture command
+ * @param screenshotPath - Path where the screenshot will be saved
+ * @throws Error if user cancels or screenshot fails
+ */
+async function takeScreenshot(screenshotPath: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const screencapture = spawn(SCREENCAPTURE_PATH, ["-i", screenshotPath], {
+      stdio: "ignore",
     });
 
-    if (screenshotPath && existsSync(screenshotPath)) {
-      try {
-        unlinkSync(screenshotPath);
-      } catch (e) {
-        // 忽略清理错误
+    screencapture.on("close", () => {
+      if (existsSync(screenshotPath)) {
+        resolve();
+      } else {
+        reject(new Error(ERROR_MESSAGES.SCREENSHOT_CANCELLED));
       }
+    });
+
+    screencapture.on("error", (error) => {
+      reject(error);
+    });
+  });
+}
+
+/**
+ * Get screenshot rectangle by calculating position from mouse location and image dimensions
+ * @param screenshotPath - Path to the screenshot file
+ * @returns Rectangle with position and size, or null if unable to determine
+ */
+async function getScreenshotRect(screenshotPath: string): Promise<Rect | null> {
+  try {
+    // Get mouse position as approximate screenshot location
+    const mousePosition = await getMousePosition();
+    if (!mousePosition) {
+      return null;
+    }
+
+    // Get actual image dimensions
+    const dimensions = await getImageDimensions(screenshotPath);
+
+    // Use mouse position as center point of screenshot region
+    const x = mousePosition.x - dimensions.width / 2;
+    const y = mousePosition.y - dimensions.height / 2;
+
+    return { x, y, width: dimensions.width, height: dimensions.height };
+  } catch (e) {
+    console.error("Failed to get screenshot region info:", e);
+    return null;
+  }
+}
+
+/**
+ * Handle errors during screenshot process
+ * @param error - The error that occurred
+ * @param screenshotPath - Path to clean up if exists
+ */
+async function handleError(error: unknown, screenshotPath: string): Promise<void> {
+  const errorMessage = error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR;
+
+  // Don't show toast if user cancelled
+  if (errorMessage.includes("cancelled") || errorMessage.includes("取消")) {
+    return;
+  }
+
+  await showToast({
+    style: Toast.Style.Failure,
+    title: TOAST_MESSAGES.SCREENSHOT_FAILED,
+    message: errorMessage,
+  });
+
+  // Clean up temporary file
+  cleanupScreenshot(screenshotPath);
+}
+
+/**
+ * Clean up temporary screenshot file
+ * @param screenshotPath - Path to the screenshot file
+ */
+function cleanupScreenshot(screenshotPath: string): void {
+  if (screenshotPath && existsSync(screenshotPath)) {
+    try {
+      unlinkSync(screenshotPath);
+    } catch (e) {
+      // Ignore cleanup errors
+      console.error("Failed to cleanup screenshot:", e);
     }
   }
 }
 
+
+/**
+ * Get image dimensions using macOS sips command
+ * @param imagePath - Path to the image file
+ * @returns Image dimensions (width and height in pixels)
+ */
 async function getImageDimensions(imagePath: string): Promise<{ width: number; height: number }> {
   try {
-    const { stdout } = await execAsync(`/usr/bin/sips -g pixelWidth -g pixelHeight "${imagePath}"`);
+    const { stdout } = await execAsync(`${SIPS_PATH} -g pixelWidth -g pixelHeight "${imagePath}"`);
     const widthMatch = stdout.match(/pixelWidth: (\d+)/);
     const heightMatch = stdout.match(/pixelHeight: (\d+)/);
 
@@ -96,83 +198,101 @@ async function getImageDimensions(imagePath: string): Promise<{ width: number; h
       };
     }
   } catch (error) {
-    // 忽略错误
+    console.error("Failed to get image dimensions:", error);
   }
-  return { width: 800, height: 600 };
+  // Return default dimensions if unable to determine
+  return { width: DEFAULT_IMAGE_WIDTH, height: DEFAULT_IMAGE_HEIGHT };
 }
 
+/**
+ * Search paths for binary files (in order of priority)
+ */
+const BINARY_SEARCH_PATHS = [
+  (binaryName: string) => join(__dirname, binaryName), // Current directory (dist)
+  (binaryName: string) => join(__dirname, "assets", binaryName), // Assets directory
+  (binaryName: string) => join(__dirname, "..", binaryName), // Project root (dev environment)
+] as const;
+
+/**
+ * Find binary file path by searching multiple locations
+ * @param binaryName - Name of the binary file to find
+ * @returns Full path to the binary, or null if not found
+ */
 async function getBinaryPath(binaryName: string): Promise<string | null> {
-  // 优先检查当前目录（dist目录）
-  const currentDirBinary = join(__dirname, binaryName);
-  if (existsSync(currentDirBinary)) {
-    return currentDirBinary;
+  // Check predefined search paths
+  for (const getPath of BINARY_SEARCH_PATHS) {
+    const path = getPath(binaryName);
+    if (existsSync(path)) {
+      return path;
+    }
   }
 
-  // 检查 assets 目录（如果使用了 assets）
-  const assetsDirBinary = join(__dirname, "assets", binaryName);
-  if (existsSync(assetsDirBinary)) {
-    return assetsDirBinary;
-  }
-
-  // 检查项目根目录（开发环境）
-  const rootDirBinary = join(__dirname, "..", binaryName);
-  if (existsSync(rootDirBinary)) {
-    return rootDirBinary;
-  }
-
-  // 检查系统 PATH
+  // Check system PATH as fallback
   try {
     const { stdout } = await execAsync(`which ${binaryName}`);
-    if (stdout.trim()) {
-      return stdout.trim();
+    const path = stdout.trim();
+    if (path) {
+      return path;
     }
   } catch (error) {
-    // 忽略
+    // Binary not in system PATH
   }
 
   return null;
 }
 
-async function getMousePosition(): Promise<{ x: number; y: number } | null> {
-  const binaryPath = await getBinaryPath("get_mouse_position");
+
+/**
+ * Get current mouse position using native binary
+ * @returns Mouse coordinates, or null if unable to determine
+ */
+async function getMousePosition(): Promise<Point | null> {
+  const binaryPath = await getBinaryPath(MOUSE_POSITION_BINARY);
 
   if (!binaryPath) {
-    console.error("找不到 get_mouse_position 可执行文件");
+    console.error(`Cannot find ${MOUSE_POSITION_BINARY} executable`);
     return null;
   }
 
   try {
     const { stdout } = await execAsync(`"${binaryPath}"`);
-    const [x, y] = stdout.trim().split(',').map(Number);
+    const [x, y] = stdout.trim().split(",").map(Number);
     return { x, y };
   } catch (error) {
-    console.error("获取鼠标位置失败:", error);
+    console.error("Failed to get mouse position:", error);
     return null;
   }
 }
 
-async function showFloatingWindow(imagePath: string, screenshotRect: { x: number; y: number; width: number; height: number } | null) {
-  const binaryPath = await getBinaryPath("float-window");
+/**
+ * Display screenshot in a floating window with OCR support
+ * @param imagePath - Path to the screenshot image
+ * @param screenshotRect - Optional rectangle for window positioning
+ */
+async function showFloatingWindow(imagePath: string, screenshotRect: Rect | null): Promise<void> {
+  const binaryPath = await getBinaryPath(FLOAT_WINDOW_BINARY);
 
   if (!binaryPath) {
     await showToast({
       style: Toast.Style.Failure,
-      title: "错误",
-      message: "找不到 float-window 可执行文件",
+      title: TOAST_MESSAGES.ERROR,
+      message: TOAST_MESSAGES.BINARY_NOT_FOUND,
     });
     return;
   }
 
+  // Build arguments for float-window binary
   const args = [imagePath];
   if (screenshotRect) {
     args.push(
       screenshotRect.x.toString(),
       screenshotRect.y.toString(),
       screenshotRect.width.toString(),
-      screenshotRect.height.toString()
+      screenshotRect.height.toString(),
     );
   }
 
+  // Spawn float-window process in detached mode
   const floatProcess = spawn(binaryPath, args, {
     detached: true,
     stdio: "ignore",
@@ -180,17 +300,25 @@ async function showFloatingWindow(imagePath: string, screenshotRect: { x: number
 
   floatProcess.unref();
 
-  // 等待窗口打开
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  // Wait for window to open
+  await new Promise((resolve) => setTimeout(resolve, WINDOW_OPEN_DELAY_MS));
 
-  // 监控进程状态，当进程退出时清理临时文件
+  // Monitor process and cleanup temporary file when window closes
+  startFileCleanupMonitor(imagePath);
+}
+
+/**
+ * Start monitoring the float-window process and cleanup file when it exits
+ * @param imagePath - Path to the temporary screenshot file to cleanup
+ */
+function startFileCleanupMonitor(imagePath: string): void {
   const monitorScript = `
     tell application "System Events"
       repeat
         try
           set processExists to false
           try
-            set processList to (every process whose name is "float-window")
+            set processList to (every process whose name is "${FLOAT_WINDOW_BINARY}")
             if (count of processList) > 0 then
               set processExists to true
             end if
@@ -201,7 +329,7 @@ async function showFloatingWindow(imagePath: string, screenshotRect: { x: number
             exit repeat
           end if
           
-          delay 0.5
+          delay ${MONITOR_CHECK_INTERVAL_MS / 1000}
         on error
           try
             do shell script "rm -f '${imagePath}'"
@@ -212,12 +340,11 @@ async function showFloatingWindow(imagePath: string, screenshotRect: { x: number
     end tell
   `;
 
-  const monitorProcess = spawn("/usr/bin/osascript", ["-e", monitorScript], {
+  const monitorProcess = spawn(OSASCRIPT_PATH, ["-e", monitorScript], {
     detached: true,
     stdio: "ignore",
   });
 
   monitorProcess.unref();
 }
-
 
