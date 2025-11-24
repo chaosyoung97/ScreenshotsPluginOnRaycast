@@ -5,13 +5,7 @@
   "title": "Screenshots Plugin",
   "description": "快速截图并悬浮显示，支持 OCR 文字识别 | Quick screenshot with floating window and OCR text recognition",
   "icon": "assets/icon.png",
-  "author": "ChaosYoung",
-  "contributors": [
-    {
-      "name": "ChaosYoung",
-      "email": "saber97792@gmail.com"
-    }
-  ],
+  "author": "chaosyoung",
   "categories": [
     "Productivity"
   ],
