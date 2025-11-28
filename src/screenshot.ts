@@ -28,22 +28,12 @@ const ERROR_MESSAGES = {
   UNKNOWN_ERROR: "Unknown error",
 } as const;
 
-// Toast messages (Chinese)
-const TOAST_MESSAGES_ZH = {
-  SCREENSHOT_FAILED: "截图失败",
-  ERROR: "错误",
-  BINARY_NOT_FOUND: "找不到 float-window 可执行文件",
-} as const;
-
-// Toast messages (English)
-const TOAST_MESSAGES_EN = {
+// Toast messages
+const TOAST_MESSAGES = {
   SCREENSHOT_FAILED: "Screenshot Failed",
   ERROR: "Error",
   BINARY_NOT_FOUND: "Cannot find float-window executable",
 } as const;
-
-// Use Chinese by default (can be made configurable in the future)
-const TOAST_MESSAGES = TOAST_MESSAGES_ZH;
 
 /**
  * Rectangle position and size
@@ -146,11 +136,15 @@ async function getScreenshotRect(screenshotPath: string): Promise<Rect | null> {
  * @param error - The error that occurred
  * @param screenshotPath - Path to clean up if exists
  */
-async function handleError(error: unknown, screenshotPath: string): Promise<void> {
-  const errorMessage = error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR;
+async function handleError(
+  error: unknown,
+  screenshotPath: string,
+): Promise<void> {
+  const errorMessage =
+    error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR;
 
   // Don't show toast if user cancelled
-  if (errorMessage.includes("cancelled") || errorMessage.includes("取消")) {
+  if (errorMessage.includes("cancelled") ) {
     return;
   }
 
@@ -179,15 +173,18 @@ function cleanupScreenshot(screenshotPath: string): void {
   }
 }
 
-
 /**
  * Get image dimensions using macOS sips command
  * @param imagePath - Path to the image file
  * @returns Image dimensions (width and height in pixels)
  */
-async function getImageDimensions(imagePath: string): Promise<{ width: number; height: number }> {
+async function getImageDimensions(
+  imagePath: string,
+): Promise<{ width: number; height: number }> {
   try {
-    const { stdout } = await execAsync(`${SIPS_PATH} -g pixelWidth -g pixelHeight "${imagePath}"`);
+    const { stdout } = await execAsync(
+      `${SIPS_PATH} -g pixelWidth -g pixelHeight "${imagePath}"`,
+    );
     const widthMatch = stdout.match(/pixelWidth: (\d+)/);
     const heightMatch = stdout.match(/pixelHeight: (\d+)/);
 
@@ -241,7 +238,6 @@ async function getBinaryPath(binaryName: string): Promise<string | null> {
   return null;
 }
 
-
 /**
  * Get current mouse position using native binary
  * @returns Mouse coordinates, or null if unable to determine
@@ -269,7 +265,10 @@ async function getMousePosition(): Promise<Point | null> {
  * @param imagePath - Path to the screenshot image
  * @param screenshotRect - Optional rectangle for window positioning
  */
-async function showFloatingWindow(imagePath: string, screenshotRect: Rect | null): Promise<void> {
+async function showFloatingWindow(
+  imagePath: string,
+  screenshotRect: Rect | null,
+): Promise<void> {
   const binaryPath = await getBinaryPath(FLOAT_WINDOW_BINARY);
 
   if (!binaryPath) {
@@ -347,4 +346,3 @@ function startFileCleanupMonitor(imagePath: string): void {
 
   monitorProcess.unref();
 }
-

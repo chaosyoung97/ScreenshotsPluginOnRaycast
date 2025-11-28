@@ -1,90 +1,89 @@
 # Screenshots Plugin for Raycast
 
-中文文档 | [English](README_EN.md)
+A Raycast extension that allows you to quickly capture screenshots and display them in a **persistent floating window overlay** with OCR text recognition support.
 
-一个 Raycast 插件，可以快速截取屏幕并将图片悬浮显示在整个屏幕上，支持 OCR 文字识别。
+## Features
 
-## 功能特性
+- 🖼️ **Quick Screenshot**: Invoke macOS screenshot tool instantly
+- 📺 **Floating Window**: Display screenshots in a persistent, draggable floating window overlay (1:1 ratio)
+- 🔤 **OCR Text Recognition**: Automatic text recognition (supports Chinese and English)
+- 📋 **Copy & Paste**: One-click copy or paste recognized text
+- 🖱️ **Click-Through**: Image area is fully transparent to clicks, allowing you to work on underlying apps while referencing the screenshot
+- 🔝 **Always on Top**: Window stays on top of all other windows
+- 🖱️ **Draggable**: Move the window anywhere on screen (drag from edges)
+- ⌨️ **ESC to Close**: Press ESC key to close the floating window
+- 🧹 **Auto Cleanup**: Automatically removes temporary files
 
-- 🖼️ **快速截图**：快速唤起 macOS 截图工具
-- 📺 **悬浮显示**：将截图以悬浮窗口形式显示在屏幕上（1:1 显示）
-- 🔤 **OCR 识别**：自动 OCR 文字识别（支持中英文）
-- 📋 **复制粘贴**：一键复制或粘贴识别的文字
-- 🖱️ **点击穿透**：支持点击穿透，不影响底层应用操作（图片区域完全穿透）
-- 🔝 **置顶显示**：窗口始终悬浮在最上层
-- 🖱️ **自由拖动**：可拖动窗口位置
-- ⌨️ **快捷关闭**：按 ESC 键关闭悬浮窗口
-- 🧹 **自动清理**：自动清理临时文件
+## Installation
 
-## 安装
+### From Raycast Store (Recommended)
+1. Open Raycast
+2. Search for "Screenshots Plugin"
+3. Click Install
 
-### 从 Raycast Store 安装（推荐）
-1. 打开 Raycast
-2. 搜索 "Screenshots Plugin"
-3. 点击安装
+### Manual Installation
+1. Clone or download this repository
+2. Open Raycast Settings
+3. Go to Extensions tab
+4. Click "Add Extension"
+5. Select this project directory
 
-### 手动安装
-1. 克隆或下载此仓库
-2. 在 Raycast 中打开扩展设置
-3. 选择"导入扩展"
-4. 选择此项目目录
+## Usage
 
-## 使用方法
+1. Open Raycast and search for "Take Screenshot"
+2. Execute the command to invoke macOS screenshot tool
+3. Select the area you want to capture
+4. The screenshot will appear in a floating window
+5. If text is detected, click the OCR button to view recognized text
+6. Press ESC to close the window
 
-1. 在 Raycast 中搜索 "Take Screenshot" 命令
-2. 执行命令后，会唤起 macOS 的截图工具
-3. 选择要截图的区域
-4. 截图完成后，图片会以悬浮窗口形式显示在屏幕上
-5. 如果检测到文字，点击 OCR 按钮查看识别结果
-6. 按 ESC 键关闭悬浮窗口
-
-## 开发
+## Development
 
 ```bash
-# 安装依赖
+# Install dependencies
 npm install
 
-# 编译原生悬浮窗口应用（必需）
+# Compile native floating window application (required)
 ./build-native.sh
 
-# 开发模式
+# Development mode
 npm run dev
 
-# 构建
+# Build
 npm run build
 ```
 
-## 技术实现
+## Technical Details
 
-- 使用 macOS 的 `screencapture` 命令进行截图
-- 使用原生 Objective-C 应用创建悬浮窗口（`float-window`）
-- 支持点击穿透（`ignoresMouseEvents = YES`）
-- 窗口始终在最上层（`NSFloatingWindowLevel`）
-- 图片 1:1 显示，不缩放
-- 图片区域完全点击穿透（不影响底层应用操作）
-- 窗口边缘 10px 区域可拖动窗口
-- 按 ESC 键关闭窗口
-- 集成 Apple Vision Framework 进行 OCR 识别
+- Uses macOS `screencapture` command for screenshots
+- Native Objective-C application for floating window (`float-window`)
+- Click-through support (`ignoresMouseEvents = YES`)
+- Always on top (`NSFloatingWindowLevel`)
+- 1:1 image display without scaling
+- Image area is fully click-through (doesn't interfere with underlying apps)
+- 10px edge area for dragging the window
+- Press ESC to close the window
+- Integrated Apple Vision Framework for OCR
 
-## 系统要求
+## Requirements
 
-- macOS 11.0 或更高版本
-- Raycast 1.60.0 或更高版本
+- macOS 11.0 or later
+- Raycast 1.60.0 or later
 
-## 许可证
+## License
 
 MIT
 
-## 作者
+## Author
 
 **ChaosYoung**
-- 邮箱：saber97792@gmail.com
-- GitHub：[@chaosyoung97](https://github.com/chaosyoung97)
+- Email: saber97792@gmail.com
+- GitHub: [@chaosyoung97](https://github.com/chaosyoung97)
 
-## 贡献
+## Contributing
 
-欢迎提交 Issue 和 Pull Request！
+Issues and pull requests are welcome!
 
-## 更新日志
+## Changelog
 
-查看 [CHANGELOG.md](CHANGELOG.md) 了解版本历史。
+See [CHANGELOG.md](CHANGELOG.md) for version history.

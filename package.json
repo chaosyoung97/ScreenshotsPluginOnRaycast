@@ -1,9 +1,9 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "screenshots-plugin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "title": "Screenshots Plugin",
-  "description": "快速截图并悬浮显示，支持 OCR 文字识别 | Quick screenshot with floating window and OCR text recognition",
+  "description": "Take screenshots and display them in a persistent floating window overlay with OCR text recognition",
   "icon": "assets/icon.png",
   "author": "chaosyoung",
   "categories": [
@@ -16,9 +16,8 @@
     "floating window",
     "text recognition",
     "capture",
-    "截图",
-    "文字识别",
-    "悬浮窗口"
+    "overlay",
+    "vision"
   ],
   "repository": {
     "type": "git",
@@ -31,8 +30,7 @@
     {
       "name": "screenshot",
       "title": "Take Screenshot",
-      "subtitle": "截图并悬浮显示",
-      "description": "快速截取屏幕并悬浮显示截图，支持 OCR 文字识别 | Capture screen and display in floating window with OCR support",
+      "description": "Capture screen and display in a persistent, draggable floating window overlay. Includes OCR for text extraction.",
       "mode": "no-view"
     }
   ],
