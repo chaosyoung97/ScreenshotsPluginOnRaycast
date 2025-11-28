@@ -34,3 +34,4 @@ get_mouse_position
 # Temporary files
 *.tmp
 .cache/
+.qoder/
